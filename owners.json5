@@ -1,0 +1,10 @@
+// Who owns what. An update of a package is accepted automatically only when the login in its recipe.json5 is listed here.
+{
+  // Owners of the CubeOS project: only they may publish ids of the form `cubeos.*`.
+  cubeos: ["denmoth"],
+
+  // package id -> GitHub logins that own it
+  packages: {
+    "denmoth.hello": ["denmoth"],
+  },
+}

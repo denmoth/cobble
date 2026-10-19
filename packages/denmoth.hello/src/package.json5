@@ -1,0 +1,31 @@
+// EXAMPLE: a minimal app in plain Lua (docs/packages/02-manifest.md in the CubeOS repository).
+{
+  format: 1,
+  id: "denmoth.hello",
+  name: "Hello (example)",
+  version: "0.1.0",
+  description: "Example package: a window that says hello",
+  author: "Denmoth",
+  license: "MIT",
+  homepage: "https://github.com/denmoth/cobble/tree/main/packages/denmoth.hello",
+
+  kind: "app",
+  lang: "lua",
+  category: "apps",
+  priority: "optional",
+
+  cubeos: { min: "0.5.0", max: null },
+  depends: {},
+  want: {},
+  provides: [],
+  conflicts: [],
+
+  files: ["init.lua"],
+  modules: { "hello": "init.lua" },
+
+  permissions: { need: ["gfx"], want: [] },
+
+  contributes: {
+    apps: [{ id: "hello", name: "Hello", entry: "hello", category: "apps" }],
+  },
+}

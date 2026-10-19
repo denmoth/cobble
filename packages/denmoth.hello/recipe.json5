@@ -1,0 +1,9 @@
+// EXAMPLE package that shows the format. Its sources are right here, in src/.
+{
+  id: "denmoth.hello",
+  owner: "denmoth",
+  source: { kind: "here" },
+
+  // Sources in the author's own repository instead:
+  // source: { kind: "git", repo: "https://github.com/x/y", ref: "v1.0.0", path: "subdir" },
+}
