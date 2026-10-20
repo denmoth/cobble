@@ -1,56 +1,41 @@
 # Cobble
 
-The official package catalog of CubeOS, an operating system for ComputerCraft (CC:Tweaked) computers. The package manager
-`stew` reads `index.json5` from here and downloads ready `.cpk` packages from the GitHub releases of this repository.
+Package catalog for [CubeOS](https://github.com/denmoth/CubeOS). The CubeOS package manager, `stew`, reads
+`index.json5` from here and downloads packages from this repository's releases.
 
-## Install CubeOS
+## Installing CubeOS
 
-On a clean ComputerCraft computer with HTTP enabled:
+On a clean CC: Tweaked computer with HTTP enabled:
 
 ```
 wget run https://raw.githubusercontent.com/denmoth/cobble/main/install.lua
 ```
 
-The installer asks for the language, the profile (minimal text system, desktop, everything or your own choice), how to keep
-the packages, your settings and your account. A computer with pixel graphics (CC: Graphics) gets the graphical installer and
-the CDE desktop.
-
-Not enough space? Put a second computer next to it, connect both with modems and run on the second one:
+If the computer runs out of space, put a second computer next to it, connect them with modems and run this on the second
+one:
 
 ```
 wget run https://raw.githubusercontent.com/denmoth/cobble/main/pkghost.lua
 ```
 
-Then pick "Second computer" in the installer (or `stew host pair CODE` later) and type the code it shows.
+It shows a code. Pick "Second computer" in the installer (or run `stew host pair CODE` later) and type it in.
 
-## Layout
+## What's here
 
-```
-index.json5        the catalog: packages, versions, links to .cpk files, hashes, sizes, permissions
-install.lua        the installer (one file, runs on plain CraftOS)
-pkghost.lua        package storage on a second computer
-owners.json5       who owns which package id; "cubeos" lists the owners of the project
-packages/<id>/     recipe.json5 (where the sources are, who owns the package) and src/ when the sources live here
-```
+`index.json5` is the catalog itself. `install.lua` and `pkghost.lua` are the two programs above. `owners.json5` says who
+owns which package id. Each package that is published from source has a folder in `packages/` with a `recipe.json5`
+pointing at its sources; `packages/denmoth.hello` is just an example.
 
-System packages (`cubeos.*`) are in the release `system-<version>`; other packages in releases named `<id>-<version>`.
-`packages/denmoth.hello` is only an example.
+The system packages (`cubeos.*`) are in the `system-<version>` release.
 
-## Adding a package
+## Publishing a package
 
-1. Create `packages/<author>.<name>/recipe.json5`:
-   - sources here: `{ id: "author.name", owner: "your-github-login", source: { kind: "here" } }` with the files in `src/`;
-   - sources in your repository: `source: { kind: "git", repo: "https://github.com/x/y", ref: "<tag or commit>", path: "subfolder" }`.
-2. The sources need a `package.json5` manifest (see `docs/packages/02-manifest.md` in the CubeOS repository).
-3. Open a pull request. Packages are built from their sources; prebuilt archives are not accepted.
+Add `packages/<author>.<name>/recipe.json5` and open a pull request. If the sources live here, the recipe is
+`{ id: "author.name", owner: "your-github-login", source: { kind: "here" } }` and the files go in `src/`. If they live
+in your own repository, use `source: { kind: "git", repo: "https://github.com/x/y", ref: "<tag or commit>" }` instead.
+The sources need a `package.json5` manifest; the format is in `docs/packages/02-manifest.md` in the CubeOS repository.
 
-From inside the game, `stew publish <folder>` will open such a pull request for you once the publishing service is online.
-
-## Acceptance rules
-
-- The manifest is complete; the id has the form `author.name`, is unique and not taken by someone else.
-- A package is at most 256 KB (larger by agreement).
-- `cubeos.*` ids are reserved for the owners of the project.
-- A new package is reviewed by a person. An update of your own package without new permissions is accepted automatically
-  when the checks pass; new permissions are reviewed by a person.
-- Raise the version for every change: a published version cannot be replaced.
+A few rules: the id has the form `author.name` and can't be taken by someone else, a package is at most 256 KB, and
+`cubeos.*` ids are reserved for CubeOS itself. Bump the version for every change, since a published version can't be
+replaced. New packages are reviewed by hand. Updates to your own package go through on their own unless they ask for new
+permissions.
