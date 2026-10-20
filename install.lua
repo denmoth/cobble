@@ -4,6 +4,7 @@
 -- Downloads cubeos.setup and its dependencies, checks sha256, unpacks them with its own inflate into a temp folder and runs
 -- the installer screens (lib/setup), which install the system through stew.
 local BASE = "https://raw.githubusercontent.com/denmoth/cobble/main/"
+local BRANCH
 local START = "cubeos.setup"
 local MIN_CC = 1.100
 
@@ -275,6 +276,27 @@ local function get(rel)
   return read(fs.combine(from, rel)) or error("no file " .. fs.combine(from, rel), 0)
 end
 
+-- raw.githubusercontent.com serves a branch from a cache for minutes after a push: take the files of the newest commit
+local function pin(base)
+  local o, r, b = base:match("^https://raw%.githubusercontent%.com/([^/]+)/([^/]+)/([^/]+)/$")
+  if not o or #b == 40 then return base end
+  local h = http.get("https://api.github.com/repos/" .. o .. "/" .. r .. "/commits/" .. b)
+  if not h then return base end
+  local sha = h.readAll():match('"sha"%s*:%s*"(%x+)"')
+  h.close()
+  return sha and #sha == 40 and ("https://raw.githubusercontent.com/" .. o .. "/" .. r .. "/" .. sha .. "/") or base
+end
+
+-- the screen as CraftOS left it: text mode, its own colours
+local function reset_screen()
+  if term.setGraphicsMode then pcall(term.setGraphicsMode, false) end
+  if term.nativePaletteColour then
+    for i = 0, 15 do pcall(term.setPaletteColour, 2 ^ i, term.nativePaletteColour(2 ^ i)) end
+  end
+  if color then term.setBackgroundColour(colours.black) end
+  term.setTextColour(colours.white)
+end
+
 local function u(s, at, n)
   local v, m = 0, 1
   for j = 0, n - 1 do v, m = v + byte(s, at + j) * m, m * 256 end
@@ -350,6 +372,7 @@ local function main()
   local cc = tonumber((_HOST or ""):match("ComputerCraft (%d+%.%d+)") or "")
   if cc and cc < MIN_CC then error("CubeOS needs CC: Tweaked " .. MIN_CC .. " or newer (this is " .. _HOST .. ")", 0) end
   if not from and not http then error("HTTP is off: enable http in the ComputerCraft server config, or use --from <folder>", 0) end
+  if not from then BRANCH = BASE; BASE = pin(BASE) end
   local free = fs.getFreeSpace(root)
 
   local index = json5(get("index.json5")).packages or error("index.json5 has no packages", 0)
@@ -398,7 +421,7 @@ local function main()
   local import = loader(idx)
   return import("setup").main({
     fs = fs, term = term, root = root, tmp = TMP, import = import, colour = color,
-    source = from and { name = "local", kind = "path", url = from } or { name = "cobble", kind = "http", url = BASE .. "index.json5" },
+    source = from and { name = "local", kind = "path", url = from } or { name = "cobble", kind = "http", url = (BRANCH or BASE) .. "index.json5" },
     events = events and dofile(events) or nil, gui = not text,
     cleanup = function() if not keep and fs.exists(TMP) then fs.delete(TMP) end end,
     reboot = os.reboot,
@@ -408,6 +431,7 @@ end
 local ok, err = pcall(main)
 if not keep and fs.exists(TMP) then fs.delete(TMP) end
 if not ok then
+  reset_screen()
   print()
   say("CubeOS setup stopped: " .. tostring(err), colours.red)
 end
