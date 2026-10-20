@@ -303,15 +303,16 @@ local function u(s, at, n)
   return v
 end
 
--- unpack every file except line maps into dest; returns the manifest text and the paths
-local function unpack_cpk(data, dest)
+-- unpack every file except line maps into memory (the installer writes nothing to the disk before it installs);
+-- returns the manifest text and {path = contents}
+local function unpack_cpk(data)
   if sub(data, 1, 4) ~= "CPK\1" then error("not a .cpk package", 0) end
   local ml = u(data, 5, 4)
   local p = 9 + ml
   local nb, blocks, raw = u(data, p, 2), {}, {}
   p = p + 2
   for j = 1, nb do blocks[j] = { u(data, p, 4), u(data, p + 4, 4), byte(data, p + 12) }; p = p + 17 end
-  local nf, paths = u(data, p, 2), {}
+  local nf, files = u(data, p, 2), {}
   p = p + 2
   for _ = 1, nf do
     local pl = u(data, p, 2)
@@ -326,22 +327,21 @@ local function unpack_cpk(data, dest)
         raw[bi] = b[3] == 2 and inflate(st) or b[3] == 0 and st or error("unknown compression method " .. b[3], 0)
         breathe()
       end
-      write(dest .. "/" .. path, sub(raw[bi], off + 1, off + size))
-      paths[#paths + 1] = path
+      files[path] = sub(raw[bi], off + 1, off + size)
     end
   end
-  return sub(data, 9, 8 + ml), paths
+  return sub(data, 9, 8 + ml), files
 end
 
--- a loader like sys/boot/pkgload.lua (unpacked packages, absolute module names): Cubic chunks get (rt, import), Lua modules
--- get import in their environment
+-- a loader like sys/boot/pkgload.lua over the packages in memory: Cubic chunks get (rt, import), Lua modules get import in
+-- their environment
 local function loader(idx)
-  local rt, cache = dofile(idx.rt), {}
+  local rt, cache = assert(load(idx.rt, "=cubic/rt.lua", "t", _G))(), {}
   local function import(spec)
     local m = idx.modules[spec] or error("module '" .. spec .. "' is not installed (no package provides it)", 0)
     local key = m[1] .. ":" .. m[2]
     if cache[key] == nil then
-      local src = read(idx.packages[m[1]].dir .. "/" .. m[2]) or error("module file missing: " .. key, 0)
+      local src = idx.packages[m[1]].files[m[2]] or error("module file missing: " .. key, 0)
       local env = _G
       if not src:find("^local __rt, __import = %.%.%.") then env = setmetatable({ import = import }, { __index = _G }) end
       cache[key] = assert(load(src, "=" .. m[2]:gsub("^lib/", ""), "t", env))(rt, import) or {}
@@ -388,10 +388,7 @@ local function main()
       for dep in pairs(rec.depends or {}) do want[#want + 1] = dep end
     end
   end
-  local need = 16384
-  for _, e in ipairs(order) do need = need + e.rec.size + e.rec.installed_size end
-  if free < need then error(("the installer needs %d KB, %d KB free"):format(need / 1024, free / 1024), 0) end
-
+  -- an old installer of the first version left its packages on the disk
   if fs.exists(TMP) then fs.delete(TMP) end
   local idx = { packages = {}, modules = {} }
   local _, y = term.getCursorPos()
@@ -403,27 +400,33 @@ local function main()
     if #data ~= e.rec.size or sub(data, -2) ~= "\0\0" or sha256_hex(sub(data, 1, -35)) ~= e.rec.sha256 then
       error(e.id .. ": damaged download (size or sha256)", 0)
     end
-    local dir = TMP .. "/pkg/" .. e.id
-    local mtext, paths = unpack_cpk(data, dir)
+    local mtext, files = unpack_cpk(data)
     local man = json5(mtext)
-    idx.packages[e.id] = { dir = dir }
+    idx.packages[e.id] = { files = files }
     -- modules: lib/a/b.lua is a.b (lib/a/init.lua is a), plus the manifest's own
-    for _, path in ipairs(paths) do
+    for path in pairs(files) do
       local r = path:match("^lib/(.+)%.lua$")
       if r then idx.modules[(r:gsub("/init$", ""):gsub("/", "."))] = { e.id, path } end
     end
     for name, path in pairs(man.modules or {}) do idx.modules[name] = { e.id, path } end
-    if fs.exists(dir .. "/src/cubic/rt.lua") then idx.rt = dir .. "/src/cubic/rt.lua" end
+    if files["src/cubic/rt.lua"] then idx.rt = files["src/cubic/rt.lua"] end
   end
   print()
   if not idx.rt then error("the installer packages lack the Cubic runtime (cubeos.cubic-rt)", 0) end
 
   local import = loader(idx)
   return import("setup").main({
-    fs = fs, term = term, root = root, tmp = TMP, import = import, colour = color,
+    fs = fs, term = term, root = root, import = import, colour = color,
+    -- fonts and pictures of the installer's own packages (in memory)
+    asset = function(rel)
+      for _, p in pairs(idx.packages) do
+        local d = p.files["assets/" .. rel]
+        if d then return d end
+      end
+    end,
     source = from and { name = "local", kind = "path", url = from } or { name = "cobble", kind = "http", url = (BRANCH or BASE) .. "index.json5" },
     events = events and dofile(events) or nil, gui = not text,
-    cleanup = function() if not keep and fs.exists(TMP) then fs.delete(TMP) end end,
+    cleanup = function() end,
     reboot = os.reboot,
   })
 end
